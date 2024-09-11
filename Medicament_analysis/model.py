@@ -11,7 +11,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from lightning.pytorch import Trainer
 from lightning.pytorch.tuner import Tuner
-from torch.optim.lr_scheduler import StepLR
 from lightning.pytorch.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 
@@ -21,9 +20,9 @@ print("CUDA version:", torch.version.cuda)
 
 # Hyper-parameters
 
-select = False
-batch_size = 32
-learning_rate =0.1
+select = True
+batch_size = 16
+learning_rate =0.001
 
 class NeuralNetwork(L.LightningModule):
 
@@ -34,12 +33,11 @@ class NeuralNetwork(L.LightningModule):
         self.loss = nn.BCEWithLogitsLoss()
         self.sigmoid = nn.Sigmoid()
         self._initialize_weights()
-        bias_value = -1.5170
+        bias_value = 0
         nn.init.constant_(self.linear.bias, bias_value)
         self.train_accuracy = torchmetrics.Accuracy(task="binary")
         self.val_accuracy = torchmetrics.Accuracy(task="binary")
         self.test_accuracy = torchmetrics.Accuracy(task="binary")
-        self.lr = 0.0
 
     def _initialize_weights(self, seed=42):
         # Xavier initialization for linear layer
@@ -58,7 +56,8 @@ class NeuralNetwork(L.LightningModule):
             df2 = df[df['diagnosis'] == 1].iloc[:5, :]
             df = pd.concat([df1, df2], axis=0)
             df = df.sample(frac=1, random_state=42).reset_index(drop=True)
-            #batch_size = 5
+            print(df.diagnosis.value_counts())
+            batch_size = 5
 
         X_train = df.drop(columns=['diagnosis'])
         y_train = df['diagnosis']
@@ -73,20 +72,20 @@ class NeuralNetwork(L.LightningModule):
         df = pd.read_csv('val.csv')
         if select:
             df = df.iloc[:10, :]
-            #batch_size = 1
+            batch_size = 1
         X_val = df.drop(columns=['diagnosis'])
         y_val = df['diagnosis']
         X_val_tensor = torch.tensor(X_val.values, dtype=torch.float)
         y_val_tensor = torch.tensor(y_val.values, dtype=torch.float)
         val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=47)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
         return val_loader
     
     def test_dataloader(self) :
         df = pd.read_csv('test.csv')
         if select:
             df = df.iloc[:2, :]
-            #batch_size = 1
+            batch_size = 1
         X_test = df.drop(columns=['diagnosis'])
         y_test = df['diagnosis']
         X_test_tensor = torch.tensor(X_test.values, dtype=torch.float)
@@ -96,8 +95,7 @@ class NeuralNetwork(L.LightningModule):
         return  test_loader
     
     def configure_optimizers(self):
-        optimizer = Adam(self.parameters(), lr=self.lr)
-        return optimizer
+        return Adam(self.parameters(), lr= learning_rate)
     
     def training_step(self, batch, batch_idx):
         input= batch[0]
@@ -135,20 +133,63 @@ class NeuralNetwork(L.LightningModule):
         acc = self.test_accuracy(predicted_label, true_label)
         self.log("test_accuracy", acc)
         
+select = True 
+
+df = pd.read_csv('train.csv')
+if select:
+
+    df1 = df[df['diagnosis'] == 0].iloc[:5, :]
+    df2 = df[df['diagnosis'] == 1].iloc[:5, :]
+    df = pd.concat([df1, df2], axis=0)
+    df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+    print(df.diagnosis.value_counts())
+    batch_size = 5
+X_train = df.drop(columns=['diagnosis'])
+y_train = df['diagnosis']
+X_train_tensor = torch.tensor(X_train.values, dtype=torch.float)
+y_train_tensor = torch.tensor(y_train.values, dtype=torch.float)
+train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=47)
+
+df = pd.read_csv('val.csv')
+if select:
+    df = df.iloc[:10, :]
+    batch_size = 1
+X_val = df.drop(columns=['diagnosis'])
+y_val = df['diagnosis']
+X_val_tensor = torch.tensor(X_val.values, dtype=torch.float)
+y_val_tensor = torch.tensor(y_val.values, dtype=torch.float)
+val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+
+df = pd.read_csv('test.csv')
+if select:
+    df = df.iloc[:2, :]
+    batch_size = 1
+X_test = df.drop(columns=['diagnosis'])
+y_test = df['diagnosis']
+X_test_tensor = torch.tensor(X_test.values, dtype=torch.float)
+y_test_tensor = torch.tensor(y_test.values, dtype=torch.float)
+test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
+test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
+
 
 tb_logger = TensorBoardLogger(save_dir='lightning_logs', name='model')
 model = NeuralNetwork()
-trainer = Trainer(max_epochs=50,
-                devices="auto",
+trainer = Trainer(max_epochs=30,
+                devices=2,
                 accelerator="auto",
                 strategy="ddp",
                 logger=tb_logger,
                 log_every_n_steps = 1,
                 fast_dev_run=False)
 #tuner = Tuner(trainer)
-#lr_finder = tuner.lr_find(model, min_lr=1e-03, max_lr=1, num_training=100)
+#lr_finder = tuner.lr_find(model)
 #new_lr = lr_finder.suggestion()
-model.lr = 0.1
+#model.lr = new_lr
 #print("Suggested Learning rate", new_lr)
-trainer.fit(model)
-torch.save(model.state_dict(), 'model.pth')
+trainer.fit(model, train_loader)
+
+
+
+  
