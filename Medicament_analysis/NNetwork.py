@@ -33,13 +33,29 @@ class NeuralNetwork(L.LightningModule):
         self.linear = nn.Linear(148,1)
         self.loss = nn.BCEWithLogitsLoss()
         self.sigmoid = nn.Sigmoid()
+        self.lr = 0.1
         self._initialize_weights()
         bias_value = -1.5170
         nn.init.constant_(self.linear.bias, bias_value)
         self.train_accuracy = torchmetrics.Accuracy(task="binary")
-        self.val_accuracy = torchmetrics.Accuracy(task="binary")
         self.test_accuracy = torchmetrics.Accuracy(task="binary")
-        self.lr = 0.0
+        self.confmat = torchmetrics.ConfusionMatrix(task="binary")
+        self.precision = torchmetrics.Precision(task="binary")
+        self.recall = torchmetrics.Recall(task="binary")
+        self.prcurve = torchmetrics.PrecisionRecallCurve(task="binary")
+        self.f1_score = torchmetrics.F1Score(task="binary")
+
+        self.collection = torchmetrics.MetricCollection([
+            self.confmat,
+            self.precision,
+            self.recall,
+            self.prcurve,
+            self.f1_score
+        ])
+
+        self.losses = []
+        self.accuracies = []
+        
 
     def _initialize_weights(self, seed=42):
         # Xavier initialization for linear layer
@@ -69,18 +85,6 @@ class NeuralNetwork(L.LightningModule):
 
         return train_loader
     
-    def val_dataloader(self):
-        df = pd.read_csv('val.csv')
-        if select:
-            df = df.iloc[:10, :]
-            #batch_size = 1
-        X_val = df.drop(columns=['diagnosis'])
-        y_val = df['diagnosis']
-        X_val_tensor = torch.tensor(X_val.values, dtype=torch.float)
-        y_val_tensor = torch.tensor(y_val.values, dtype=torch.float)
-        val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=47)
-        return val_loader
     
     def test_dataloader(self) :
         df = pd.read_csv('test.csv')
@@ -112,11 +116,14 @@ class NeuralNetwork(L.LightningModule):
         #print("train",train_loss)
         #print("label",predicted_label)
         acc = self.train_accuracy(predicted_label, true_label)
+        self.losses.append(train_loss)
+        self.accuracies.append(acc)
         self.log('train_loss', train_loss, on_epoch=True, sync_dist =True)
         self.log("train_accuracy", acc, prog_bar=True, on_epoch=True, on_step=False, sync_dist =True)
+        self.tracker.update(predicted_label, true_label)
         return train_loss
        
-
+    """
     def validation_step(self, batch, batch_idx):
         input,true_label = batch
         output = self(input)
@@ -126,7 +133,8 @@ class NeuralNetwork(L.LightningModule):
         acc = self.val_accuracy(predicted_label, true_label)
         self.log('val_loss', val_loss, prog_bar=True,  sync_dist =True)
         self.log("val_accuracy", acc, prog_bar=True, on_epoch=True, on_step=False, sync_dist =True)
-    
+    """
+
     def test_step(self, batch, batch_idx):
         input,true_label = batch
         output = self(input)
@@ -134,6 +142,32 @@ class NeuralNetwork(L.LightningModule):
         predicted_label = (probabilities > 0.5).long()
         acc = self.test_accuracy(predicted_label, true_label)
         self.log("test_accuracy", acc)
+ 
+    def on_train_epoch_end(self):
+        self.tracker.increment()
+    
+    def on_train_end(self):
+        all_results = self.tracker.compute_all()
+
+        # Plot the metrics
+        fig = plt.figure(layout="constrained")
+        ax1 = plt.subplot(2, 2, 1)
+        ax2 = plt.subplot(2, 2, 2)
+        ax3 = plt.subplot(2, 2, (3, 4))
+
+        # ConfusionMatrix and ROC for the last step
+        self.confmat.plot(val=all_results[-1]['BinaryConfusionMatrix'], ax=ax1)
+        self.roc.plot(all_results[-1]["BinaryROC"], ax=ax2)
+
+        # Plot the history for scalar metrics
+        scalar_results = [
+            {k: v for k, v in ar.items() if isinstance(v, torch.Tensor) and v.numel() == 1} for ar in all_results
+        ]
+        self.tracker.plot(val=scalar_results, ax=ax3)
+
+        # Show plot
+        plt.show()
+
         
 
 tb_logger = TensorBoardLogger(save_dir='lightning_logs', name='model')
@@ -145,10 +179,7 @@ trainer = Trainer(max_epochs=50,
                 logger=tb_logger,
                 log_every_n_steps = 1,
                 fast_dev_run=False)
-#tuner = Tuner(trainer)
-#lr_finder = tuner.lr_find(model, min_lr=1e-03, max_lr=1, num_training=100)
-#new_lr = lr_finder.suggestion()
+
 model.lr = 0.1
-#print("Suggested Learning rate", new_lr)
 trainer.fit(model)
 torch.save(model.state_dict(), 'model.pth')
