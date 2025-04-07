@@ -1,0 +1,7 @@
+sample_fraction: 0.4
+n_splits: 3
+trials: 20
+sample_random_state: 40
+torch_seed: 42
+model: Neural_network
+mode: 0
