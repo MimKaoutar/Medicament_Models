@@ -1,0 +1,40 @@
+/pytorch/aten/src/ATen/native/cuda/Loss.cu:94: operator(): block: [84,0,0], thread: [125,0,0] Assertion `input_val >= zero && input_val <= one` failed.
+[W 2025-04-10 18:17:19,420] Trial 0 failed with parameters: {'epoch': 500, 'activation': 'LRELU', 'layers': 2, 'hidden_dim_1': 200, 'hidden_dim_2': 100, 'learning_rate': 0.0007790455796541913} because of the following error: RuntimeError('CUDA error: device-side assert triggered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n').
+Traceback (most recent call last):
+  File "/deepia/inutero/anaconda3/envs/montreal/lib/python3.9/site-packages/optuna/study/_optimize.py", line 197, in _run_trial
+    value_or_values = func(trial)
+  File "/deepia/inutero/code/alignment/optimization.py", line 112, in optimize
+    loss = train_optimize(conf, device, df_sampler_temp, df_sampler, num_epochs, activation, layers, hidden_dim_1, hidden_dim_2, learning_rate, learning_rate_penalty)
+  File "/deepia/inutero/code/alignment/optimization.py", line 87, in train_optimize
+    losses_val.append(loss.item())
+RuntimeError: CUDA error: device-side assert triggered
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+[W 2025-04-10 18:17:19,420] Trial 0 failed with value None.
+Error executing job with overrides: []
+Traceback (most recent call last):
+  File "/deepia/inutero/code/alignment/main_Train.py", line 98, in my_app
+    study.optimize(optimize_function, n_trials=conf.trials)
+  File "/deepia/inutero/anaconda3/envs/montreal/lib/python3.9/site-packages/optuna/study/study.py", line 475, in optimize
+    _optimize(
+  File "/deepia/inutero/anaconda3/envs/montreal/lib/python3.9/site-packages/optuna/study/_optimize.py", line 63, in _optimize
+    _optimize_sequential(
+  File "/deepia/inutero/anaconda3/envs/montreal/lib/python3.9/site-packages/optuna/study/_optimize.py", line 160, in _optimize_sequential
+    frozen_trial = _run_trial(study, func, catch)
+  File "/deepia/inutero/anaconda3/envs/montreal/lib/python3.9/site-packages/optuna/study/_optimize.py", line 248, in _run_trial
+    raise func_err
+  File "/deepia/inutero/anaconda3/envs/montreal/lib/python3.9/site-packages/optuna/study/_optimize.py", line 197, in _run_trial
+    value_or_values = func(trial)
+  File "/deepia/inutero/code/alignment/optimization.py", line 112, in optimize
+    loss = train_optimize(conf, device, df_sampler_temp, df_sampler, num_epochs, activation, layers, hidden_dim_1, hidden_dim_2, learning_rate, learning_rate_penalty)
+  File "/deepia/inutero/code/alignment/optimization.py", line 87, in train_optimize
+    losses_val.append(loss.item())
+RuntimeError: CUDA error: device-side assert triggered
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.
