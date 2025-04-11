@@ -1,11 +1,9 @@
+import json
+
 import pandas as pd
 import numpy as np
 import os
 import csv
-
-from sklearn.model_selection.tests.test_search import one_hot_encoder
-from tqdm import tqdm
-from collections import Counter
 
 root_db = '/deepia/inutero/efemeris/data/EFEMERIS IRIT'
 output_path = '/deepia/inutero/efemeris/data/efemeris_txt_v022025'
@@ -147,7 +145,9 @@ if __name__ == '__main__':
     print(f"{len(montreal_columns.difference(efemeris_columns))} ATC codes from MONTREAL not in EFEMERIS")
 
     # Reorder columns to follow the order in 'ordered_columns'
+    common_columns = efemeris_columns.intersection(montreal_columns)
     ordered_columns = [c[1:] if c[0]=='_' else c for c in ordered_columns ]
+
     one_hot_df_filled_0 = one_hot_df.reindex(columns=ordered_columns, fill_value=0)
     one_hot_df_filled_nan = one_hot_df.reindex(columns=ordered_columns)
 
@@ -173,10 +173,57 @@ if __name__ == '__main__':
         final_df.to_csv(os.path.join(output_path, f'all_random_montreal_meds_sparse_{split}.csv'), index=False)
         print("---")
 
+    # Approach using columns present in both datasets, and keeping patients with these meds
+    print("Working with Common approach")
+    common_columns = [c[1:] if c[0]=='_' else c for c in common_columns ]
+    # keep order
+    filtered_ordered_columns = [ c for c in ordered_columns if c in common_columns]
+    filtered_df = df_prescriptions[df_prescriptions['atc'].isin(filtered_ordered_columns)]
+
+    one_hot_df_common = pd.crosstab(filtered_df.index, filtered_df['atc'])
+    print(one_hot_df_common.shape)
+
+    one_hot_df_filled_common = one_hot_df_common[filtered_ordered_columns].reindex(columns=filtered_ordered_columns)
+    print(one_hot_df_common.shape)
+    print(one_hot_df_filled_common.head())
+
+    # Load train/dev/test and assign y (diagnosis), for only common meds
+    filtered_ordered_columns.extend(['risk', 'diagnosis'])
+    for split in ['train', 'dev', 'test']:
+        ifile = os.path.join(output_path, 'all', f'en_random_{split}', 'txt_presc_t1.csv')
+        df = pd.read_csv(ifile, delimiter=';')
+        df = df.set_index('NUM_GROSSESSE')
+        df = df[['MALFO_MAJ']].rename(columns={'MALFO_MAJ': 'diagnosis'})
+        print("Before join", df.shape)
+        final_df = df.join(one_hot_df_filled_common, how='inner')
+        print("After join", final_df.shape)
+        final_df = final_df.reindex(columns=filtered_ordered_columns)
+        final_df.to_csv(os.path.join(output_path, f'all_random_montreal_common_meds_sparse_{split}.csv'), index=False)
+        print("---")
+
+    with open('common_ordered_columns.json', 'w') as f:
+        forfile = {'columns': filtered_ordered_columns}
+        json.dump(forfile, f, ensure_ascii=False, indent=4)
+
 
 """
 In total 1096 in EFEMERIS and 439 in MONTREAL
 with 350 columns)
 746 from EFEMERIS not in MONTREAL
 89 from MONTREAL not in EFEMERIS
+
+
+with common approach
+Train
+Before join (95413, 1)
+After join (74036, 351)
+---
+Dev
+Before join (31804, 1)
+After join (24784, 351)
+---
+Test
+Before join (31805, 1)
+After join (24599, 351)
+
 """

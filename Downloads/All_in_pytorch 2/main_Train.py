@@ -34,7 +34,9 @@ lmc.initialize()
 plt.rcParams["text.usetex"] = False
 
 
-# get the risk of combination and save the order of columns | risk position -2 | diagnosis position -1
+
+
+#get the risk of combination and save the order of columns | risk position -2 | diagnosis position -1
 def get_Comb(df):
     med_df = df.drop(columns=['diagnosis'])
     # Compute hash only once
@@ -43,58 +45,56 @@ def get_Comb(df):
     risk_df = df.groupby('hash', as_index=False)['diagnosis'].agg(risk='mean')
     # Merge back with original data and drop hash column
     risk_df = df.merge(risk_df, on='hash').drop(columns=['hash'])
-    # get desired order of columns
-    with open("ordered_columns.json", "r") as file:
+    #get desired order of columns
+    # with open("ordered_columns.json", "r") as file:
+    with open("common_ordered_columns.json", "r") as file:
         desired_order = json.load(file)["columns"]
-    new_cols = [c[1:] for c in desired_order[:-2]]
-    new_cols.append('risk')
-    new_cols.append('diagnosis')
-    desired_order = new_cols
+    # new_cols = [c[1:] for c in desired_order[:-2]]
+    # new_cols.append('risk')
+    # new_cols.append('diagnosis')
+    # desired_order = new_cols
     risk_df = risk_df[desired_order]
     return risk_df
 
-
-# fix seed
+#fix seed 
 def set_seed(seed=42):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_seed_all(seed) 
     torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.benchmark = False  
 
-
-# use Hydra to enable mutli run options and to easily change configurations
+#use Hydra to enable mutli run options and to easily change configurations
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def my_app(conf):
-    # set seed
-    set_seed(conf.sample_random_state)
+    
+    #set seed 
+    set_seed(conf.sample_random_state) 
 
-    # hydra params
+    #hydra params
     print(OmegaConf.to_yaml(conf))
     output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     print(f"Output directory  : {output_dir}")
 
-    # set device
+    #set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # get data sample
-    df = pd.read_csv(
-        '/deepia/inutero/efemeris/data/efemeris_txt_v022025/all_random_montreal_meds_sparse_train.csv')  # CHANGE
+    #get data sample 
+    df= pd.read_csv('/deepia/inutero/efemeris/data/efemeris_txt_v022025/all_random_montreal_common_meds_sparse_train.csv') #CHANGE
     df.drop(columns=['risk'], inplace=True)
     df_risk = get_Comb(df)
     df_risk['hash'] = df_risk.drop(columns=['diagnosis']).apply(lambda row: hash(tuple(row)), axis=1)
     df_risk_temp = df_risk[['hash']].drop_duplicates()
-    df_sampler_temp = df_risk_temp.sample(frac=1, random_state=conf.sample_random_state)
-    df_sampler = df_risk[df_risk['hash'].isin(df_sampler_temp['hash'])]
-    # df_sampler_new = df_risk[~df_risk['hash'].isin(df_sampler_temp['hash'])].drop(columns=['hash'])  # NO TEST
+    df_sampler_temp = df_risk_temp.sample(frac=1, random_state=conf.sample_random_state) 
+    df_sampler = df_risk[df_risk['hash'].isin(df_sampler_temp['hash'])] 
+    #df_sampler_new = df_risk[~df_risk['hash'].isin(df_sampler_temp['hash'])].drop(columns=['hash'])  # NO TEST 
     print("All data shape :", df_risk.shape)
     print("Sample shape", df_sampler.shape)
-    # print("Test Sample shape", df_sampler_new.shape) # NO TEST
+    #print("Test Sample shape", df_sampler_new.shape) # NO TEST
 
-    optimize_function = partial(optimize, conf=conf, device=device, df_sampler_temp=df_sampler_temp,
-                                df_sampler=df_sampler)
+    optimize_function = partial(optimize, conf=conf, device=device, df_sampler_temp=df_sampler_temp, df_sampler=df_sampler)
     study = optuna.create_study(direction="minimize")
     study.optimize(optimize_function, n_trials=conf.trials)
 
@@ -113,14 +113,14 @@ def my_app(conf):
     save_path = f"{output_dir}/sorted_trials.csv"
     df_sorted.to_csv(save_path, index=False)
     print("The sorted DataFrame has been saved to 'sorted_trials.csv'.")
-
-    # plot optimization plot
+  
+    #plot optimization plot
     plot_optimization_history(study)
     save_path = f"{output_dir}/optimisation_history.png"
     plt.savefig(save_path)
     plt.clf()
 
-    # get best params
+    #get best params
     best_params = study.best_params
     print(best_params)
     # Open a file in write mode
@@ -128,15 +128,16 @@ def my_app(conf):
         # Write the best_params to the file
         file.write(str(best_params))
     print("Best parameters have been saved to best_params.txt")
-
-    # Train
-    df_sampler.drop(columns=['hash'], inplace=True)
-    X = df_sampler.iloc[:, :-2].to_numpy(dtype="float32")  # all meds columns
-    y = df_sampler['diagnosis'].to_numpy(dtype="float32")
-    y_risk = df_sampler.iloc[:, -2].to_numpy(dtype="float32")  # risk column
+    
+    
+    #Train 
+    df_sampler.drop(columns=['hash'],inplace=True)
+    X= df_sampler.iloc[:,:-2].to_numpy(dtype="float32")  #all meds columns
+    y= df_sampler['diagnosis'].to_numpy(dtype="float32")
+    y_risk = df_sampler.iloc[:,-2].to_numpy(dtype="float32")  #risk column
     X_tensor = torch.tensor(X, dtype=torch.float32).to(device)
-    y_tensor = torch.tensor(y, dtype=torch.float32).unsqueeze(1).to(device)  # For training
-    y_risk_tensor = torch.tensor(y_risk, dtype=torch.float32).unsqueeze(1).to(device)  # For Evaluation
+    y_tensor = torch.tensor(y, dtype=torch.float32).unsqueeze(1).to(device) #For training
+    y_risk_tensor = torch.tensor(y_risk, dtype=torch.float32).unsqueeze(1).to(device) #For Evaluation 
     """ NO TEST """
     """
     X_new = df_sampler_new.iloc[:,:-2].to_numpy(dtype="float32")
@@ -146,51 +147,46 @@ def my_app(conf):
     """
 
     num_inputs, num_features = X.shape[0], X.shape[1]  # Number of features
-
-    losses_train = []
-    # losses_test = [] # NO TEST
+    
+    losses_train= []
+    #losses_test = [] # NO TEST
     best_loss_train = float('inf')
-    # best_loss_test = float('inf') # NO TEST
+    #best_loss_test = float('inf') # NO TEST
     best_model_state = None
     loss_fn = nn.BCELoss()
     if conf.model == 'Logistic_regression':
         model = LogisticRegression_Simple(device, num_features=num_features)
-        optimizer = torch.optim.Adam(model.parameters(), eps=1e-08, lr=best_params['learning_rate'])
+        optimizer = torch.optim.Adam(model.parameters(), eps=1e-08, lr = best_params['learning_rate'])
     if conf.model == 'Logistic_regression_penalty':
-        model = LogisticRegression_Penalty(device, num_features=num_features, num_inputs=num_inputs)
-        # Optimizer for weights and biases (main model parameters)
-        optimizer = torch.optim.Adam([p for name, p in model.named_parameters() if name != "penalties"], eps=1e-08,
-                                     lr=best_params['learning_rate'])
-        # Optimizer for penalties (separate learning rate) + different direction
-        optimizer_penalty = torch.optim.Adam([model.penalties], lr=best_params['learning_rate_penalty'], maximize=True)
-    if conf.model == 'Neural_network' and conf.mode == 0:
-        model = NeuralNetwork(device, activation=best_params['activation'], num_features=num_features,
-                              layers=best_params['layers'], hidden_dim_1=best_params['hidden_dim_1'],
-                              hidden_dim_2=(best_params['hidden_dim_2'] if "hidden_dim_2" in best_params else None))
-        optimizer = torch.optim.Adam(model.parameters(), eps=1e-08, lr=best_params['learning_rate'])
-    if conf.model == 'Neural_network' and conf.mode == 1:
-        model = NeuralNetwork(device, activation=best_params['activation'], num_features=num_features, mode=1,
-                              layers=best_params['layers'], hidden_dim_1=best_params['hidden_dim_1'],
-                              hidden_dim_2=(best_params['hidden_dim_2'] if "hidden_dim_2" in best_params else None))
-        optimizer = torch.optim.Adam(model.parameters(), eps=1e-08, lr=best_params['learning_rate'])
-        optimizer_penalty = torch.optim.Adam([model.penalties], lr=best_params['learning_rate_penalty'], maximize=True)
+            model = LogisticRegression_Penalty(device, num_features=num_features, num_inputs=num_inputs)
+            # Optimizer for weights and biases (main model parameters)
+            optimizer = torch.optim.Adam([p for name, p in model.named_parameters() if name != "penalties"], eps=1e-08, lr=best_params['learning_rate'])
+            # Optimizer for penalties (separate learning rate) + different direction
+            optimizer_penalty = torch.optim.Adam([model.penalties], lr=best_params['learning_rate_penalty'], maximize=True)
+    if conf.model == 'Neural_network' and conf.mode==0:
+            model = NeuralNetwork(device, activation=best_params['activation'], num_features=num_features, layers=best_params['layers'], hidden_dim_1=best_params['hidden_dim_1'],  hidden_dim_2=(best_params['hidden_dim_2'] if "hidden_dim_2" in best_params else None))
+            optimizer = torch.optim.Adam(model.parameters(), eps=1e-08, lr = best_params['learning_rate'])
+    if conf.model == 'Neural_network' and conf.mode==1:
+            model = NeuralNetwork(device, activation=best_params['activation'], num_features=num_features,mode=1, layers=best_params['layers'], hidden_dim_1=best_params['hidden_dim_1'],  hidden_dim_2=(best_params['hidden_dim_2'] if "hidden_dim_2" in best_params else None))
+            optimizer = torch.optim.Adam(model.parameters(), eps=1e-08, lr = best_params['learning_rate'])
+            optimizer_penalty = torch.optim.Adam([model.penalties], lr=best_params['learning_rate_penalty'], maximize=True)
 
     model.to(device)
     num_epochs = best_params['epoch']
     num_epochs = 10000
     for epoch in range(num_epochs):
-        # train
+        #train
         y_pred_train = model(X_tensor)
-        # compute loss
+        #compute loss
         loss = loss_fn(y_pred_train, y_tensor)
         # Backward pass
         optimizer.zero_grad()
         loss.backward()
-
-        # train
+        
+        #train 
         loss_train = loss_fn(y_pred_train, y_risk_tensor)
         losses_train.append(loss_train.item())
-        # test
+        #test
         """ NO TEST """
         """
         y_pred_test = model(X_new_tensor) 
@@ -208,8 +204,8 @@ def my_app(conf):
 
         # save best model  
         if loss_train < best_loss_train:
-            best_loss_train = loss_train
-            best_model_train = model.state_dict()
+                best_loss_train = loss_train
+                best_model_train = model.state_dict() 
         """ NO TEST """
         """   
         if loss_test < best_loss_test:
@@ -218,8 +214,8 @@ def my_app(conf):
         """
         # Print loss every 100 epochs
         if (epoch + 1) % 100 == 0:
-            print(f"Epoch {epoch + 1}/{num_epochs}, LOSS Train:{loss_train.item():.4f}")
-        # print(f"Epoch {epoch+1}/{num_epochs}, LOSS Train:{loss_train.item():.4f}, LOSS Test: {loss_test.item():.4f}") #NO TEST
+             print(f"Epoch {epoch+1}/{num_epochs}, LOSS Train:{loss_train.item():.4f}")
+            # print(f"Epoch {epoch+1}/{num_epochs}, LOSS Train:{loss_train.item():.4f}, LOSS Test: {loss_test.item():.4f}") #NO TEST
 
     # Save results to CSV file
     with open(f"{output_dir}/train_results.csv", "w", newline="") as f:
@@ -242,9 +238,9 @@ def my_app(conf):
     print(f"Best model saved with loss: {best_loss_test}")
     """
 
-    # plot loss
+    #plot loss 
     plt.plot(range(num_epochs), losses_train, label="Train loss")
-    # plt.plot(range(num_epochs), losses_test, label="Test loss") # NO TEST
+    #plt.plot(range(num_epochs), losses_test, label="Test loss") # NO TEST
     plt.xlabel('Epoch')
     plt.ylabel('LOSS')
     plt.legend()
@@ -253,12 +249,12 @@ def my_app(conf):
     plt.savefig(save_path)
     plt.clf()
 
-    # plot comb seen
+    #plot comb seen 
     df_sampler_ = df_sampler.drop(columns=['diagnosis']).value_counts().reset_index(name='count')
-    X = df_sampler_.iloc[:, :-2].to_numpy(dtype="float32")
-    y_risk = df_sampler_.iloc[:, -2].to_numpy(dtype="float32")
+    X= df_sampler_.iloc[:,:-2].to_numpy(dtype="float32")
+    y_risk = df_sampler_.iloc[:,-2].to_numpy(dtype="float32")
     X_tensor = torch.tensor(X, dtype=torch.float32).to(device)
-    y_risk_tensor = torch.tensor(y_risk, dtype=torch.float32).unsqueeze(1).to(device)
+    y_risk_tensor = torch.tensor(y_risk, dtype=torch.float32).unsqueeze(1).to(device) 
 
     """  NO TEST """
     """
@@ -271,21 +267,18 @@ def my_app(conf):
 
     # Scatter plot of true vs predicted values
     if conf.model == 'Logistic_regression':
-        model = LogisticRegression_Simple(device, num_features=num_features)
+            model = LogisticRegression_Simple(device, num_features=num_features)
     if conf.model == 'Logistic_regression_penalty':
-        model = LogisticRegression_Penalty(device, num_features=num_features, num_inputs=num_inputs)
+            model = LogisticRegression_Penalty(device, num_features=num_features, num_inputs=num_inputs)
     if conf.model == 'Neural_network':
-        model = NeuralNetwork(device, activation=best_params['activation'], num_features=num_features, mode=conf.mode,
-                              layers=best_params['layers'], hidden_dim_1=best_params['hidden_dim_1'],
-                              hidden_dim_2=(best_params['hidden_dim_2'] if "hidden_dim_2" in best_params else None))
+            model = NeuralNetwork(device, activation=best_params['activation'], num_features=num_features, mode=conf.mode, layers=best_params['layers'], hidden_dim_1=best_params['hidden_dim_1'],  hidden_dim_2=(best_params['hidden_dim_2'] if "hidden_dim_2" in best_params else None))
 
     model.load_state_dict(torch.load(f"{output_dir}/best_model_train.pth"))
     model.eval()  # Set model to evaluation mode
     y_pred_probas = model(X_tensor)
-    sc = plt.scatter(y_risk_tensor.cpu().detach().numpy(), y_pred_probas.cpu().detach().numpy(), c=df_sampler_['count'],
-                     cmap='plasma',
-                     norm=mcolors.LogNorm(vmin=df_sampler_['count'].min(), vmax=20),
-                     s=10, label="Predictions")
+    sc = plt.scatter(y_risk_tensor.cpu().detach().numpy(), y_pred_probas.cpu().detach().numpy(), c=df_sampler_['count'], cmap='plasma',
+                    norm=mcolors.LogNorm(vmin=df_sampler_['count'].min(), vmax=20), 
+                    s=10, label="Predictions")
 
     plt.colorbar(sc, label="Fréquence du point (Log Scale)")
     plt.xlabel("Risque Vrai")
@@ -338,6 +331,8 @@ def my_app(conf):
     data.to_csv(save_path, index=False)
     print("The predicted new combination DataFrame has been saved to 'new_probabilities.csv'.")
     """
+
+
 
 
 if __name__ == "__main__":
