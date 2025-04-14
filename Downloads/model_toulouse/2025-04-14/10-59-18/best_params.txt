@@ -1,0 +1,1 @@
+{'epoch': 2000, 'activation': 'RELU', 'layers': 1, 'hidden_dim_1': 300, 'learning_rate': 0.00017087603239981984}
