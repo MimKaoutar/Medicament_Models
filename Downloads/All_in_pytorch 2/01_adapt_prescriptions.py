@@ -134,10 +134,14 @@ if __name__ == '__main__':
     print(df_prescriptions.head())
 
     one_hot_df = pd.crosstab(df_prescriptions.index, df_prescriptions['atc'])
+    one_hot_df = (one_hot_df > 0).astype(int)  # Convert to binary 0/1
     print(one_hot_df.shape)
     print(one_hot_df.head())
-    efemeris_columns = set("_"+x for x in list(one_hot_df.columns))
-    montreal_columns = set(ordered_columns[:-2])
+    # Rename columns from montreal without "_"
+    ordered_columns = [c[1:] if c[0] == '_' else c for c in ordered_columns]
+    #efemeris_columns = set("_"+x for x in list(one_hot_df.columns))
+    efemeris_columns = set(list(one_hot_df.columns))
+    montreal_columns = set(ordered_columns[:-2]) # Remove risk and diagnosis by now
 
     print(f"In total {len(efemeris_columns)} in EFEMERIS and {len(montreal_columns)} in MONTREAL")
     print(f"with {len(efemeris_columns.intersection(montreal_columns))} columns in common")
@@ -146,10 +150,13 @@ if __name__ == '__main__':
 
     # Reorder columns to follow the order in 'ordered_columns'
     common_columns = efemeris_columns.intersection(montreal_columns)
-    ordered_columns = [c[1:] if c[0]=='_' else c for c in ordered_columns ]
+    all_union_columns = list(efemeris_columns.union(montreal_columns))
 
+    # Columns only from montreal
     one_hot_df_filled_0 = one_hot_df.reindex(columns=ordered_columns, fill_value=0)
     one_hot_df_filled_nan = one_hot_df.reindex(columns=ordered_columns)
+    # All columns (UNION)
+    one_hot_df_union_filled_0 = one_hot_df.reindex(columns=all_union_columns, fill_value=0)
 
     print("Filled 0 ")
     print(one_hot_df_filled_0.shape)
@@ -158,6 +165,10 @@ if __name__ == '__main__':
     print("Filled NaN ")
     print(one_hot_df_filled_nan.shape)
     print(one_hot_df_filled_nan.head())
+
+    print("Filled 0 on UNION meds ")
+    print(one_hot_df_union_filled_0.shape)
+    print(one_hot_df_union_filled_0.head())
 
     # Load train/dev/test and assign y (diagnosis)
     one_hot_df_filled_0.drop(columns='diagnosis', inplace=True)
@@ -198,6 +209,7 @@ if __name__ == '__main__':
         final_df = df.join(one_hot_df_filled_common, how='inner')
         print("After join", final_df.shape)
         final_df = final_df.reindex(columns=filtered_ordered_columns)
+        final_df = final_df.fillna(0).astype(int)
         final_df.to_csv(os.path.join(output_path, f'all_random_montreal_common_meds_sparse_{split}.csv'), index=False)
         print("---")
 
@@ -205,7 +217,25 @@ if __name__ == '__main__':
         forfile = {'columns': filtered_ordered_columns}
         json.dump(forfile, f, ensure_ascii=False, indent=4)
 
+    print("Working with UNION approach")
+    # Load train/dev/test and assign y (diagnosis), for ALL meds (Union of Montreal and Toulouse)
+    all_union_columns.extend(['risk', 'diagnosis'])
+    for split in ['train', 'dev', 'test']:
+        ifile = os.path.join(output_path, 'all', f'en_random_{split}', 'txt_presc_t1.csv')
+        df = pd.read_csv(ifile, delimiter=';')
+        df = df.set_index('NUM_GROSSESSE')
+        df = df[['MALFO_MAJ']].rename(columns={'MALFO_MAJ': 'diagnosis'})
+        print("Before join", df.shape)
+        final_df = df.join(one_hot_df_union_filled_0, how='left')
+        print("After join", final_df.shape)
+        final_df = final_df.reindex(columns=all_union_columns)
+        final_df = final_df.fillna(0).astype(int)
+        final_df.to_csv(os.path.join(output_path, f'all_random_union_meds_sparse_{split}.csv'), index=False)
+        print("---")
 
+    with open('union_ordered_columns.json', 'w') as f:
+        forfile = {'columns': all_union_columns}
+        json.dump(forfile, f, ensure_ascii=False, indent=4)
 """
 In total 1096 in EFEMERIS and 439 in MONTREAL
 with 350 columns)
@@ -225,5 +255,19 @@ After join (24784, 351)
 Test
 Before join (31805, 1)
 After join (24599, 351)
+
+
+with union approach
+Train
+Before join (95413, 1)
+After join (95413, 1186)
+---
+Dev
+Before join (31804, 1)
+After join (31804, 1186)
+---
+Test
+Before join (31805, 1)
+After join (31805, 1186)
 
 """
