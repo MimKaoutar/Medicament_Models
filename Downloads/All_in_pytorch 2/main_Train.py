@@ -39,6 +39,7 @@ plt.rcParams["text.usetex"] = False
 #get the risk of combination and save the order of columns | risk position -2 | diagnosis position -1
 def get_Comb(df):
     med_df = df.drop(columns=['diagnosis'])
+    df.columns = df.columns.str.replace('_', '', regex=False)
     # Compute hash only once
     df['hash'] = med_df.apply(lambda row: hash(tuple(row)), axis=1)
     # Compute risk per unique hash
@@ -46,8 +47,11 @@ def get_Comb(df):
     # Merge back with original data and drop hash column
     risk_df = df.merge(risk_df, on='hash').drop(columns=['hash'])
     #get desired order of columns
-    with open("ordered_columns.json", "r") as file:
+    with open("/home/nohgab00/data/Medicament_analysis/Medicament_Models/Downloads/All_in_pytorch 2/union_ordered_columns.json", "r") as file:
         desired_order = json.load(file)["columns"]
+    for col in desired_order:
+          if col not in risk_df.columns:
+                risk_df[col]=0
     risk_df = risk_df[desired_order]
     return risk_df
 
@@ -70,6 +74,7 @@ def my_app(conf):
     #hydra params
     print(OmegaConf.to_yaml(conf))
     output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+    output_dir = "/home/nohgab00/data/Medicament_analysis/Models/Expe4"
     print(f"Output directory  : {output_dir}")
 
     #set device
