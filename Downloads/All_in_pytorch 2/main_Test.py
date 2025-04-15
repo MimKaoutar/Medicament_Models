@@ -33,12 +33,15 @@ import shap
 lmc.initialize()
 plt.rcParams["text.usetex"] = False
 
-
+#MUST READ :
+#You should specify you output_dir if you want 
+#You should add the model's best params in line 286
 
 
 #get the risk of combination and save the order of columns | risk position -2 | diagnosis position -1
 def get_Comb(df):
     med_df = df.drop(columns=['diagnosis'])
+    df.columns = df.columns.str.replace('_', '', regex=False)
     # Compute hash only once
     df['hash'] = med_df.apply(lambda row: hash(tuple(row)), axis=1)
     # Compute risk per unique hash
@@ -46,7 +49,7 @@ def get_Comb(df):
     # Merge back with original data and drop hash column
     risk_df = df.merge(risk_df, on='hash').drop(columns=['hash'])
     #get desired order of columns
-    with open("columns.json", "r") as file:
+    with open("All_in_pytorch 2/common_ordered_columns.json", "r") as file:
         desired_order = json.load(file)["columns"]
     risk_df = risk_df[desired_order]
     return risk_df
@@ -80,11 +83,12 @@ def my_app(conf):
     df= pd.read_csv('Data/sparse_med_cleaned.csv') #CHANGE 
     df.drop(columns=['ID','fin_grossesse'], inplace=True)
     df_risk = get_Comb(df)
-    df_risk['hash'] = df_risk.drop(columns=['diagnosis']).apply(lambda row: hash(tuple(row)), axis=1)
-    df_risk_temp = df_risk[['hash']].drop_duplicates()
-    df_sampler_temp = df_risk_temp.sample(frac=0, random_state=conf.sample_random_state) 
+    #df_risk['hash'] = df_risk.drop(columns=['diagnosis']).apply(lambda row: hash(tuple(row)), axis=1)
+    #df_risk_temp = df_risk[['hash']].drop_duplicates()
+    #df_sampler_temp = df_risk_temp.sample(frac=0, random_state=conf.sample_random_state) 
     #df_sampler = df_risk[df_risk['hash'].isin(df_sampler_temp['hash'])]  # NO TRAIN
-    df_sampler_new = df_risk[~df_risk['hash'].isin(df_sampler_temp['hash'])].drop(columns=['hash']) 
+    #df_sampler_new = df_risk[~df_risk['hash'].isin(df_sampler_temp['hash'])].drop(columns=['hash']) 
+    df_sampler_new = df_risk.drop_duplicates()
     print("All data shape :", df_risk.shape)
     #print("Sample shape", df_sampler.shape)  # NO TRAIN
     print("Test Sample shape", df_sampler_new.shape) 
@@ -306,9 +310,9 @@ def my_app(conf):
     plt.savefig(save_path)
     plt.clf()
 
-    data = []
-    data['risk_true'] = Y_new_tensor.cpu().detach().numpy()
-    data['risk_predicted'] = y_pred_probas.cpu().detach().numpy()
+    data = pd.DataFrame()
+    data['risk_true'] = Y_new_tensor.cpu().detach().numpy().flatten()
+    data['risk_predicted'] = y_pred_probas.cpu().detach().numpy().flatten()
     df = pd.DataFrame(data)
     save_path = f"{output_dir}/new_probabilities.csv"
     data.to_csv(save_path, index=False)

@@ -82,9 +82,10 @@ def train_optimize(conf, device, df_sampler_temp, df_sampler, num_epochs, activa
             if conf.model == 'Neural_network' and conf.mode == 1:
                 optimizer_penalty.step()
 
-        y_pred_val = model(X_val_tensor)
-        loss = loss_fn(y_pred_val , y_val_tensor)
-        losses_val.append(loss.item())
+            with torch.no_grad():
+                y_pred_val = model(X_val_tensor)
+            loss = loss_fn(y_pred_val , y_val_tensor)
+            losses_val.append(loss.item())
     return np.mean(losses_val)
 
 #objective function
@@ -105,9 +106,9 @@ def optimize(trial,conf, device,  df_sampler_temp, df_sampler):
         if conf.mode == 1: 
             learning_rate_penalty = trial.suggest_float("learning_rate_penalty", 1e-4, 1e-1, log=True)
     
-    learning_rate = trial.suggest_float("learning_rate", 1e-4, 1e-1, log=True)  # Regularization strength
+    learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
     if conf.model == "Logistic_regression_penalty":
         learning_rate_penalty = trial.suggest_float("learning_rate_penalty", 1e-4, 1e-1, log=True)
     
-    loss = train_optimize(conf, device, df_sampler_temp, df_sampler, num_epochs, activation, layers, hidden_dim_1, hidden_dim_2, learning_rate, learning_rate_penalty)
+    loss = train_optimize(conf, device, df_sampler_temp, df_sampler, num_epochs, activation, layers, hidden_dim_1, hidden_dim_2, learning_rate,learning_rate_penalty)
     return loss

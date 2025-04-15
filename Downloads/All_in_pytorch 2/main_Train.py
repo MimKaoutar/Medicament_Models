@@ -167,8 +167,7 @@ def my_app(conf):
             optimizer_penalty = torch.optim.Adam([model.penalties], lr=best_params['learning_rate_penalty'], maximize=True)
 
     model.to(device)
-    num_epochs = best_params['epoch']
-    num_epochs = 10000
+    num_epochs = best_params['epoch'] 
     for epoch in range(num_epochs):
         #train
         y_pred_train = model(X_tensor)
@@ -196,13 +195,16 @@ def my_app(conf):
             optimizer_penalty.step()
         if conf.model == 'Neural_network' and conf.mode == 1:
             optimizer_penalty.step()
+        
 
+        
+        """ NO TEST """
+        """   
         # save best model  
         if loss_train < best_loss_train:
                 best_loss_train = loss_train
                 best_model_train = model.state_dict() 
-        """ NO TEST """
-        """   
+    
         if loss_test < best_loss_test:
                 best_loss_test = loss_test
                 best_model_test = model.state_dict()    
@@ -211,7 +213,8 @@ def my_app(conf):
         if (epoch + 1) % 100 == 0:
              print(f"Epoch {epoch+1}/{num_epochs}, LOSS Train:{loss_train.item():.4f}")
             # print(f"Epoch {epoch+1}/{num_epochs}, LOSS Train:{loss_train.item():.4f}, LOSS Test: {loss_test.item():.4f}") #NO TEST
-
+             
+    best_model_train = model.state_dict()
     # Save results to CSV file
     with open(f"{output_dir}/train_results.csv", "w", newline="") as f:
         writer = csv.writer(f)
@@ -284,9 +287,9 @@ def my_app(conf):
     plt.savefig(save_path)
     plt.clf()
 
-    data = []
-    data['risk_true'] = y_risk_tensor.cpu().detach().numpy()
-    data['risk_predicted'] = y_pred_probas.cpu().detach().numpy()
+    data = pd.DataFrame()
+    data['risk_true'] = y_risk_tensor.cpu().detach().numpy().flatten()
+    data['risk_predicted'] = y_pred_probas.cpu().detach().numpy().flatten()
     df = pd.DataFrame(data)
     save_path = f"{output_dir}/seen_probabilities.csv"
     data.to_csv(save_path, index=False)
