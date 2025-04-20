@@ -46,7 +46,7 @@ def get_Comb(df):
     # Merge back with original data and drop hash column
     risk_df = df.merge(risk_df, on='hash').drop(columns=['hash'])
     #get desired order of columns
-    with open("columns.json", "r") as file:
+    with open("columns.json", "r") as file:  #CHANGE
         desired_order = json.load(file)["columns"]
     risk_df = risk_df[desired_order]
     return risk_df
@@ -63,13 +63,12 @@ def set_seed(seed=42):
 #use Hydra to enable mutli run options and to easily change configurations
 @hydra.main(version_base=None, config_path=".", config_name="config")
 def my_app(conf):
-    
     #set seed 
     set_seed(conf.sample_random_state) 
 
     #hydra params
     print(OmegaConf.to_yaml(conf))
-    output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+    output_dir = ""  #À REMPLIR 
     print(f"Output directory  : {output_dir}")
 
     #set device
@@ -80,11 +79,12 @@ def my_app(conf):
     df= pd.read_csv('Data/sparse_med_cleaned.csv') #CHANGE 
     df.drop(columns=['ID','fin_grossesse'], inplace=True)
     df_risk = get_Comb(df)
-    df_risk['hash'] = df_risk.drop(columns=['diagnosis']).apply(lambda row: hash(tuple(row)), axis=1)
-    df_risk_temp = df_risk[['hash']].drop_duplicates()
-    df_sampler_temp = df_risk_temp.sample(frac=0, random_state=conf.sample_random_state) 
+    #df_risk['hash'] = df_risk.drop(columns=['diagnosis']).apply(lambda row: hash(tuple(row)), axis=1)
+    #df_risk_temp = df_risk[['hash']].drop_duplicates()
+    #df_sampler_temp = df_risk_temp.sample(frac=0, random_state=conf.sample_random_state) 
     #df_sampler = df_risk[df_risk['hash'].isin(df_sampler_temp['hash'])]  # NO TRAIN
-    df_sampler_new = df_risk[~df_risk['hash'].isin(df_sampler_temp['hash'])].drop(columns=['hash']) 
+    #df_sampler_new = df_risk[~df_risk['hash'].isin(df_sampler_temp['hash'])].drop(columns=['hash']) 
+    df_sampler_new = df_risk
     print("All data shape :", df_risk.shape)
     #print("Sample shape", df_sampler.shape)  # NO TRAIN
     print("Test Sample shape", df_sampler_new.shape) 
@@ -290,7 +290,7 @@ def my_app(conf):
     if conf.model == 'Neural_network':
             model = NeuralNetwork(device, activation=best_params['activation'], num_features=num_features, mode=conf.mode, layers=best_params['layers'], hidden_dim_1=best_params['hidden_dim_1'],  hidden_dim_2=(best_params['hidden_dim_2'] if "hidden_dim_2" in best_params else None))
 
-    model.load_state_dict(torch.load(f"{output_dir}/best_model_test.pth"))
+    model.load_state_dict(torch.load(f"{output_dir}/best_model_test.pth")) #À MODIFIER
     model.eval()  # Set model to evaluation mode
     y_pred_probas = model(X_new_tensor)
     sc = plt.scatter(Y_new_tensor.cpu().detach().numpy(), y_pred_probas.cpu().detach().numpy(), c=df_sampler_new_['count'], cmap='plasma',
@@ -306,9 +306,9 @@ def my_app(conf):
     plt.savefig(save_path)
     plt.clf()
 
-    data = []
-    data['risk_true'] = Y_new_tensor.cpu().detach().numpy()
-    data['risk_predicted'] = y_pred_probas.cpu().detach().numpy()
+    data = pd.DataFrame()
+    data['risk_true'] = Y_new_tensor.cpu().detach().numpy().flatten()
+    data['risk_predicted'] = y_pred_probas.cpu().detach().numpy().flatten()
     df = pd.DataFrame(data)
     save_path = f"{output_dir}/new_probabilities.csv"
     data.to_csv(save_path, index=False)
